@@ -1,0 +1,28 @@
+
+.*
+/.neetml/config.yaml
+.DS_Store
+*.json
+/_Anonymise Data/template
+/_Anonymise Data/test_anonymised
+/_Anonymise Data/test_original
+/_Data Archive/DSSG
+/_Old/_Anonymise Data/test_anonymised
+/_Old/_Anonymise Data/test_original
+/_Old/_Anonymise Data/template
+*.pyc
+/dist/
+/*.egg-info/
+/logs/*.log
+/_Old/data (2024-09-10)
+/data/02. processed/profiles
+*data*/
+*Data*/
+/_Code for Paper (feature_importance)/temp_data/*parquet
+/_Data Archive
+/_Old
+/_Other Documents
+
+*.parquet
+/guide_notebook/experiment_outputs/
+/guide_installation/poetry (to be tested)/$

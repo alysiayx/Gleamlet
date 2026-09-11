@@ -9,12 +9,13 @@ from bs4 import BeautifulSoup
 import zipfile
 import io
 from pathlib import Path
-import cgi
 from typing import Literal, Union
+from ..config import NEETMLConfig
 
 from ..utils.misc import (
     styled_print,
     set_default_path,
+    make_output_dir,
     load_dataframe,
     resolve_dataframe
 )
@@ -24,7 +25,6 @@ from ..utils.constants import (
     EXT_COL_PREFIX,
     ExtRefs,
     CSP_CONFIGS,
-    DATA_PATHS,
     STUD_ID_COL,
     MergeMetadata,
     DATA_CATEGORIES,
@@ -57,27 +57,32 @@ from .modules.derivation import (
 logger = get_logger("feature_engineering")
 
 
-class FeatEngineer:
+class FeatureEngineer:
     def __init__(
         self,
         input_data_path: Union[str, Path] = None,
-        output_filename: str = "data.parquet",
+        output_filename: str | None = None,
         ext_data_dir: Union[str, Path] = None,
         proc_data_dir: Union[str, Path] = None,
-        ext_link_dir: str = "3_ext_linked",
-        derive_dir: str = "4_derived",
-        agg_dir: str = "5_aggregated",
+        ext_link_dir: Union[str, Path] = None,
+        derive_dir: Union[str, Path] = None,
+        agg_dir: Union[str, Path] = None,
         prefix: dict = {
             "derived": DER_COL_PREFIX,
             "external": EXT_COL_PREFIX,
         },
         overwrite: bool = False,
+        settings: NEETMLConfig | None = None,
     ):
         """
-        Initializes the FeatEngineer class with specified directories for input, external data, and processed data.
-        
+        Initializes the FeatureEngineer with input, external and output paths.
+
         Parameters
         ----------
+        - input_data_path: Explicit input dataset. If omitted, uses the configured
+          `prepared` dataset registry path.
+        - output_filename: Explicit output filename. If omitted, uses the configured
+          `model_input` dataset filename.
         - ext_data_dir: Directory for external data sources (e.g., IoD, IMD datasets).
         - proc_data_dir: Directory for processed data outputs (e.g., aggregated datasets, feature-engineered datasets).
         - ext_link_dir: Subdirectory name for externally linked data within the processed data directory.
@@ -86,54 +91,90 @@ class FeatEngineer:
         - overwrite: Whether to overwrite existing files when saving outputs.
         """
         
-        paths = {
-            "ext_data_dir": ext_data_dir,
-            "proc_data_dir": proc_data_dir,
-        }
+        settings = settings or NEETMLConfig.load()
+        self.settings = settings
+        self.output_data_path = settings.get_path("model_input")
+        if output_filename is not None:
+            self.output_data_path = self.output_data_path.with_name(output_filename)
+        if self.output_data_path.suffix.lower() != ".parquet":
+            raise ValueError("The longitudinal output path must use .parquet")
+
+        self.ext_data_dir = set_default_path(
+            ext_data_dir,
+            settings.get_path("external_dir"),
+        )
+        self.proc_data_dir = set_default_path(
+            proc_data_dir,
+            settings.get_path("processed_dir"),
+        )
         
-        for key, user_path in paths.items():
-            default_value = DATA_PATHS[key.upper()]
-            setattr(self, key, set_default_path(user_path, default_value))
-        
-        subfolders = {
-            "agg_data_dir": agg_dir,
-            "link_data_dir": ext_link_dir,
-            "derive_data_dir": derive_dir,
-        }       
-        
-        for key, folder in subfolders.items():
-            default_value = DATA_PATHS[key.upper()]
-            setattr(self, key, set_default_path(self.proc_data_dir / folder, default_value))
-        
-        for path in subfolders.values():
-            (self.proc_data_dir / path).mkdir(parents=True, exist_ok=True)
+        def resolve_stage(
+            explicit: Union[str, Path, None],
+            config_key: str,
+        ) -> Path:
+            if explicit is not None:
+                candidate = Path(explicit).expanduser()
+                return (
+                    candidate.resolve()
+                    if candidate.is_absolute()
+                    else (self.proc_data_dir / candidate).resolve()
+                )
+            stage_path = settings.get_path(config_key)
+            if proc_data_dir is None:
+                return stage_path
+            try:
+                relative = stage_path.relative_to(
+                    settings.get_path("processed_dir")
+                )
+            except ValueError:
+                return stage_path
+            return (self.proc_data_dir / relative).resolve()
+
+        self.agg_data_dir = resolve_stage(agg_dir, "aggregated_dir")
+        self.link_data_dir = resolve_stage(
+            ext_link_dir,
+            "linked_dir",
+        )
+        self.derive_data_dir = resolve_stage(derive_dir, "derived_dir")
 
         self.overwrite = overwrite
         self.prefix = prefix
-        self.input_data_path = input_data_path
-        self.output_filename = output_filename
-        logger.info(f"The default name for saving output data is set to {self.output_filename}. You can change this using the 'set_output_filename' method or by providing a different name when calling methods that save output data.")
+        self.input_data_path = settings.get_path(
+            "prepared",
+            path=input_data_path,
+        )
+        logger.info(f"The default name for saving output data is set to {self.output_data_path.name}. You can change this using the 'set_output_filename' method or by providing a different name when calling methods that save output data.")
     
     #############################################
     # Utility Functions
     #############################################
         
-    def set_input_data_path(self, path: Union[str, Path]):
-        path = Path(path)
-        self.input_data_path = path
+    def set_input_data_path(self, path: Union[str, Path, None] = None):
+        """Use an explicit dataset path, or reset to the prepared-data registry."""
+        self.input_data_path = self.settings.get_path(
+            "prepared",
+            path=path,
+        )
         logger.info(f"Input data path set to '{self.input_data_path}'")
     
-    def set_output_filename(self, name: str):
-        self.output_filename = name
-        logger.info(f"Output filename set to '{self.output_filename}'")
+    def set_output_filename(self, name: str, *, save: bool = True):
+        """Set the canonical longitudinal filename and update its registry entry."""
+        self.settings.update(dataset="model_input", filename=name)
+        if save:
+            self.settings.save()
+        self.output_data_path = self.settings.get_path("model_input")
+        logger.info(f"Output filename set to '{self.output_data_path.name}'")
+
+    def get_output_filename(self) -> str:
+        return self.output_data_path.name
     
-    def get_data_path(
+    def get_path(
         self, 
         keys: Union[
-            Literal["input", "external", "processed", "derived", "aggregated", "all"],
+            Literal["input", "external", "processed", "derived", "aggregated", "all", "output"],
             list
         ],
-        return_as_dict: bool = False,
+        as_dict: bool = False,
     ) -> Union[Path, dict, pd.DataFrame]:
         """
         Retrieve the appropriate data path based on the specified data type.
@@ -149,7 +190,7 @@ class FeatEngineer:
             - "aggregation": Aggregated data path.
             - "all": Return all paths as a dictionary.
 
-        return_as_dict : bool, optional
+        as_dict : bool, optional
             If True, return as a dictionary. If False, return as a pandas DataFrame.
             - "input": Input data path.
             - "external": External data path.
@@ -158,7 +199,7 @@ class FeatEngineer:
             - "aggregation": Aggregated data path.
             - "all": Return all paths as a dictionary.
 
-        return_as_dict : bool, optional
+        as_dict : bool, optional
             If True, return as a dictionary. If False, return as a pandas DataFrame.
             Default is False.
 
@@ -167,8 +208,8 @@ class FeatEngineer:
         Path | dict | pd.DataFrame
             - If a single key is provided, returns the corresponding Path.
             - If multiple keys are provided or key="all":
-                - Returns a dictionary if `return_as_dict=True`.
-                - Returns a pandas DataFrame if `return_as_dict=False`.
+                - Returns a dictionary if `as_dict=True`.
+                - Returns a pandas DataFrame if `as_dict=False`.
         
         Raises
         ------
@@ -183,6 +224,7 @@ class FeatEngineer:
             "processed": (self.proc_data_dir, "Folder to store processed data outputs (e.g., aggregated datasets, feature-engineered datasets)"),
             "derived": (self.derive_data_dir, "Folder to store data with derived features"),
             "aggregated": (self.agg_data_dir, "Folder to store aggregated data"),
+            "output": (self.output_data_path, "Path for saving output data"),
         }
 
         # Handle "all" option
@@ -204,7 +246,7 @@ class FeatEngineer:
         selected_paths = {k: paths[k] for k in selected_keys}
 
         # Return as dict with embedded descriptions
-        if return_as_dict:
+        if as_dict:
             return {
                 k: {"path": v[0], "description": v[1]}
                 for k, v in selected_paths.items()
@@ -332,6 +374,7 @@ class FeatEngineer:
         prefix = prefix or self.prefix["external"]
         
         output_dir = set_default_path(output_dir, self.link_data_dir)
+        make_output_dir(output_dir, logger=logger)
         output_path = output_dir / output_name
         
         def _build_join_keys(prefix: str, base_keys: list[str]) -> list[str]:
@@ -479,6 +522,7 @@ class FeatEngineer:
         prefix = prefix or self.prefix["external"]
         
         output_dir = set_default_path(output_dir, self.link_data_dir)
+        make_output_dir(output_dir, logger=logger)
         output_path = output_dir / output_name
         
         if output_path.exists() and not overwrite:
@@ -506,6 +550,7 @@ class FeatEngineer:
             col_imd=col_imd,
             col_iod_score_tag=col_iod_score_tag,
             prefix=f"{prefix}_" if not prefix.endswith('_') else prefix,
+            ext_data_dir=self.ext_data_dir,
         )
         
         df_new.to_parquet(output_path, index=False)
@@ -545,7 +590,8 @@ class FeatEngineer:
             overwrite = self.overwrite
         
         output_dir = set_default_path(output_dir, self.derive_data_dir)
-        output_path = output_dir / self.output_filename
+        make_output_dir(output_dir, logger=logger)
+        output_path = output_dir / self.output_data_path.name
         
         if output_path.exists() and not overwrite:
             df = load_dataframe(output_path)
@@ -665,8 +711,9 @@ class FeatEngineer:
         if overwrite is None:
             overwrite = self.overwrite
         
-        output_dir = set_default_path(output_dir, self.agg_data_dir)
-        output_path = output_dir / self.output_filename
+        output_dir = set_default_path(output_dir, self.output_data_path.parent)
+        make_output_dir(output_dir, logger=logger)
+        output_path = output_dir / self.output_data_path.name
         conflict_output_path = output_dir / "conflict.yaml"
         
         if output_path.exists() and not overwrite:
