@@ -1,11 +1,11 @@
-# NEETML
+# Gleamlet
 
 ![Python 3.11 and 3.12](https://img.shields.io/badge/python-3.11%20%7C%203.12-3776AB?logo=python&logoColor=white)
-[![PyPI version](https://img.shields.io/pypi/v/neetml.svg)](https://pypi.org/project/neetml/)
+[![PyPI version](https://img.shields.io/pypi/v/gleamlet.svg)](https://pypi.org/project/gleamlet/)
 ![Release status: pre-release](https://img.shields.io/badge/status-pre--release-orange)
 [![License](https://img.shields.io/github/license/alysiayx/neetml.svg?cacheSeconds=60)](https://github.com/alysiayx/neetml/blob/main/LICENSE)
 
-NEETML is a machine learning toolkit for identifying young people at risk of becoming **Not in Education, Employment or Training (NEET)** in England.
+Gleamlet is a machine learning toolkit for identifying young people at risk of becoming **Not in Education, Employment or Training (NEET)** in England.
 
 > **Pre-release notice**
 >
@@ -14,7 +14,7 @@ NEETML is a machine learning toolkit for identifying young people at risk of bec
 
 ## Contents
 
-- [NEETML](#neetml)
+- [Gleamlet](#gleamlet)
   - [Contents](#contents)
   - [Installation](#installation)
   - [Key features](#key-features)
@@ -29,11 +29,38 @@ NEETML is a machine learning toolkit for identifying young people at risk of bec
 
 ## Installation
 
-Install NEETML from PyPI:
+Install Gleamlet from PyPI:
 
 ```bash
-python -m pip install neetml
+python -m pip install gleamlet
 ```
+
+Import the public API from the new package namespace:
+
+```python
+from gleamlet import DataPreprocessor, FeatureEngineer, GleamletConfig
+```
+
+### Migrating from NEETML
+
+Replace the installed distribution and update imports:
+
+```bash
+python -m pip uninstall neetml
+python -m pip install gleamlet
+```
+
+```python
+# Before
+from neetml import NEETMLConfig
+
+# After
+from gleamlet import GleamletConfig
+```
+
+Gleamlet writes project settings to `.gleamlet/config.yaml` and uses
+`GLEAMLET_*` environment variables. Existing `.neetml/config.yaml` files and
+`NEETML_*` environment variables remain supported during the migration.
 
 ## Key features
 
@@ -63,9 +90,9 @@ The project aims to:
 
 ## About the project
 
-NEETML was developed to help local authorities in England identify young people aged 16 to 18 who may be at risk of becoming NEET.
+Gleamlet was developed to help local authorities in England identify young people aged 16 to 18 who may be at risk of becoming NEET.
 
-> **Project history:** NEETML is a comprehensive update and expansion of
+> **Project history:** Gleamlet is a comprehensive update and expansion of
 > [DSSGxUK/s23_neet](https://github.com/DSSGxUK/s23_neet), extending the
 > original framework with a focus on a more robust and user-friendly workflow.
 
@@ -130,4 +157,4 @@ NEET tool developed by [Insight Bristol](https://www.bristol.gov.uk/residents/so
 
 ## Citation
 
-If you use **neetml** in your research, please cite this repository using the GitHub citation information or the BibTeX entry available under **"Cite this repository"**.
+If you use **Gleamlet** in your research, please cite this repository using the GitHub citation information or the BibTeX entry available under **"Cite this repository"**.

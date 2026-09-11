@@ -16,8 +16,11 @@ _LEVEL_MAP = {
     "NOTSET": logging.NOTSET,
 }
 
-def get_log_level(env_var: str = "NEETML_LOG_LEVEL", default: str = "INFO") -> int:
-    value = os.getenv(env_var, default).upper().strip()
+def get_log_level(env_var: str = "GLEAMLET_LOG_LEVEL", default: str = "INFO") -> int:
+    value = os.getenv(env_var)
+    if value is None and env_var == "GLEAMLET_LOG_LEVEL":
+        value = os.getenv("NEETML_LOG_LEVEL")
+    value = (value or default).upper().strip()
     return _LEVEL_MAP.get(value, _LEVEL_MAP[default])
 
 # Configure colorlog with bold fonts

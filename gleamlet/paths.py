@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from .config import NEETMLConfig
+from .config import GleamletConfig
 
 # ------------------------------- init + getters -----------------------------
 _DATA_ROOT: Path | None = None
@@ -24,7 +24,7 @@ def init(
     if force:
         _reset_all()
 
-    settings = NEETMLConfig.load(project_root=root)
+    settings = GleamletConfig.load(project_root=root)
     _DATA_ROOT = settings.project_root
 
     _PATHS = {

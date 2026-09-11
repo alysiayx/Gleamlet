@@ -1,4 +1,4 @@
-"""Configuration and path handling for NEETML."""
+"""Configuration and path handling for Gleamlet."""
 
 from __future__ import annotations
 
@@ -13,6 +13,11 @@ import yaml
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "configs" / "default_config.yaml"
 logger = logging.getLogger(__name__)
+
+
+def _get_env(name: str) -> str | None:
+    """Read a Gleamlet environment variable, then its legacy NEETML name."""
+    return os.getenv(f"GLEAMLET_{name}") or os.getenv(f"NEETML_{name}")
 
 
 def _read_yaml(path: Path, *, required: bool = False) -> dict[str, Any]:
@@ -59,7 +64,7 @@ def _resolve(root: Path, value: str | Path) -> Path:
     return path.resolve() if path.is_absolute() else (root / path).resolve()
 
 
-class NEETMLConfig:
+class GleamletConfig:
     """Combine repository defaults with optional user settings.
 
     User settings override defaults. Explicit function arguments and environment
@@ -88,7 +93,7 @@ class NEETMLConfig:
         project_root: str | Path | None = None,
         default_config_path: str | Path | None = None,
         user_config_path: str | Path | None = None,
-    ) -> "NEETMLConfig":
+    ) -> "GleamletConfig":
         """Load defaults and apply an optional user configuration.
 
         Example
@@ -102,13 +107,18 @@ class NEETMLConfig:
         defaults = _read_yaml(default_path, required=True)
         repo_root = default_path.parent.parent.parent
 
-        root_override = project_root or os.getenv("NEETML_PROJECT_ROOT")
+        root_override = project_root or _get_env("PROJECT_ROOT")
         config_root = _resolve(repo_root, root_override or ".")
-        user_path = Path(
-            user_config_path
-            or os.getenv("NEETML_USER_CONFIG")
-            or config_root / ".neetml" / "config.yaml"
-        ).expanduser().resolve()
+        configured_user_path = user_config_path or _get_env("USER_CONFIG")
+        if configured_user_path is None:
+            preferred_user_path = config_root / ".gleamlet" / "config.yaml"
+            legacy_user_path = config_root / ".neetml" / "config.yaml"
+            configured_user_path = (
+                legacy_user_path
+                if legacy_user_path.exists() and not preferred_user_path.exists()
+                else preferred_user_path
+            )
+        user_path = Path(configured_user_path).expanduser().resolve()
 
         user_config = _read_yaml(user_path)
         config = _merge(defaults, user_config)
@@ -180,10 +190,14 @@ class NEETMLConfig:
         if name == "user_config":
             return self.user_config_path
         if name in self._config.get("paths", {}):
-            env_value = os.getenv(env_var or f"NEETML_{name.upper()}")
+            env_value = os.getenv(env_var) if env_var else _get_env(name.upper())
             return _resolve(self.project_root, env_value) if env_value else self._config_path(name)
         if name in self._config.get("datasets", {}):
-            env_value = os.getenv(env_var or f"NEETML_{name.upper()}_PATH")
+            env_value = (
+                os.getenv(env_var)
+                if env_var
+                else _get_env(f"{name.upper()}_PATH")
+            )
             if env_value:
                 return _resolve(self.project_root, env_value)
             dataset = self._config["datasets"][name]
@@ -283,7 +297,7 @@ class NEETMLConfig:
         folder: str | Path | None = None,
         filename: str | None = None,
         year_range: tuple[int, int] | None = None,
-    ) -> "NEETMLConfig":
+    ) -> "GleamletConfig":
         """Apply user settings; call ``save()`` to persist them.
 
         Example
@@ -365,7 +379,7 @@ class NEETMLConfig:
         Example
         -------
         Input: unsaved user settings held in memory.
-        Output: ``<project>/.neetml/config.yaml`` and its ``Path``.
+        Output: ``<project>/.gleamlet/config.yaml`` and its ``Path``.
         """
         self.user_config_path.parent.mkdir(parents=True, exist_ok=True)
         with self.user_config_path.open("w", encoding="utf-8") as handle:
@@ -373,7 +387,7 @@ class NEETMLConfig:
         logger.info("Saved user configuration: %s", self.user_config_path)
         return self.user_config_path
 
-    def reset(self) -> "NEETMLConfig":
+    def reset(self) -> "GleamletConfig":
         """Delete user settings and restore repository defaults.
 
         Environment variables remain active because they are temporary overrides,
@@ -381,7 +395,7 @@ class NEETMLConfig:
 
         Example
         -------
-        Input: a project containing ``.neetml/config.yaml`` overrides.
+        Input: a project containing ``.gleamlet/config.yaml`` overrides.
         Output: the file is removed and this object again uses repository defaults.
         """
         removed = self.user_config_path.exists()
@@ -392,10 +406,14 @@ class NEETMLConfig:
         self._user_config = {}
         self._config = defaults
         repo_root = self.default_config_path.parent.parent.parent
-        root = os.getenv("NEETML_PROJECT_ROOT") or defaults.get("project", {}).get("root", ".")
+        root = _get_env("PROJECT_ROOT") or defaults.get("project", {}).get("root", ".")
         self.project_root = _resolve(repo_root, root)
         logger.info(
             "Reset user configuration%s; restored repository defaults",
             f" and removed {self.user_config_path}" if removed else "",
         )
         return self
+
+
+# Compatibility alias for users migrating configuration code to the new package.
+NEETMLConfig = GleamletConfig

@@ -8,14 +8,14 @@ from unittest.mock import patch
 
 import yaml
 
-from neetml.config import NEETMLConfig
+from gleamlet.config import GleamletConfig
 
 
 class ConfigTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary_directory.name).resolve()
-        self.default_path = self.root / "package/neetml/configs/default_config.yaml"
+        self.default_path = self.root / "package/gleamlet/configs/default_config.yaml"
         self.default_path.parent.mkdir(parents=True)
         self.default_path.write_text(
             yaml.safe_dump(
@@ -72,8 +72,8 @@ class ConfigTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
 
-    def load(self, *, user_config_path: Path | None = None) -> NEETMLConfig:
-        return NEETMLConfig.load(
+    def load(self, *, user_config_path: Path | None = None) -> GleamletConfig:
+        return GleamletConfig.load(
             project_root=self.project_root,
             default_config_path=self.default_path,
             user_config_path=user_config_path,
@@ -120,7 +120,7 @@ class ConfigTests(unittest.TestCase):
         )
 
     def test_data_directory_relocates_all_data_stages(self) -> None:
-        settings = NEETMLConfig.load(project_root=self.project_root)
+        settings = GleamletConfig.load(project_root=self.project_root)
         settings.update(data_dir="/secure/neet-data")
 
         self.assertEqual(
@@ -183,7 +183,7 @@ class ConfigTests(unittest.TestCase):
         )
         with patch.dict(
             os.environ,
-            {"NEETML_MODEL_INPUT_PATH": "/secure/environment.parquet"},
+            {"GLEAMLET_MODEL_INPUT_PATH": "/secure/environment.parquet"},
         ):
             settings = self.load(user_config_path=user_path)
             self.assertEqual(
@@ -194,7 +194,7 @@ class ConfigTests(unittest.TestCase):
     def test_explicit_path_overrides_environment(self) -> None:
         with patch.dict(
             os.environ,
-            {"NEETML_MODEL_INPUT_PATH": "/secure/environment.parquet"},
+            {"GLEAMLET_MODEL_INPUT_PATH": "/secure/environment.parquet"},
         ):
             settings = self.load()
             self.assertEqual(
@@ -205,7 +205,7 @@ class ConfigTests(unittest.TestCase):
             )
 
     def test_settings_persist_only_user_overrides(self) -> None:
-        user_path = self.root / ".neetml/config.yaml"
+        user_path = self.root / ".gleamlet/config.yaml"
         settings = self.load(user_config_path=user_path)
         settings.update(
             dataset="model_input",
@@ -227,7 +227,7 @@ class ConfigTests(unittest.TestCase):
         )
 
     def test_profile_outputs_are_distinct(self) -> None:
-        settings = NEETMLConfig.load(project_root=self.project_root)
+        settings = GleamletConfig.load(project_root=self.project_root)
         artifact_root = settings.get_path("experiments_dir")
         sample_dir = artifact_root / settings.profile("sample")["output"]
         real_dir = artifact_root / settings.profile("real")["output"]
@@ -240,27 +240,54 @@ class ConfigTests(unittest.TestCase):
             encoding="utf-8",
         )
         environment_root = self.root / "environment-project"
-        with patch.dict(os.environ, {"NEETML_PROJECT_ROOT": str(environment_root)}):
-            settings = NEETMLConfig.load(
+        with patch.dict(os.environ, {"GLEAMLET_PROJECT_ROOT": str(environment_root)}):
+            settings = GleamletConfig.load(
                 default_config_path=self.default_path,
                 user_config_path=user_path,
             )
         self.assertEqual(settings.project_root, environment_root.resolve())
 
+    def test_legacy_environment_variable_remains_supported(self) -> None:
+        environment_root = self.root / "legacy-environment-project"
+        with patch.dict(
+            os.environ,
+            {"NEETML_PROJECT_ROOT": str(environment_root)},
+            clear=True,
+        ):
+            settings = GleamletConfig.load(default_config_path=self.default_path)
+
+        self.assertEqual(settings.project_root, environment_root.resolve())
+
+    def test_legacy_user_config_is_used_when_new_path_is_absent(self) -> None:
+        legacy_path = self.project_root / ".neetml/config.yaml"
+        legacy_path.parent.mkdir(parents=True)
+        legacy_path.write_text(
+            "datasets:\n  model_input:\n    file: legacy.parquet\n",
+            encoding="utf-8",
+        )
+
+        settings = GleamletConfig.load(
+            project_root=self.project_root,
+            default_config_path=self.default_path,
+        )
+
+        self.assertEqual(settings.user_config_path, legacy_path)
+        self.assertEqual(settings.get_path("model_input").name, "legacy.parquet")
+
     def test_project_root_update_is_persisted(self) -> None:
-        user_path = self.root / ".neetml/config.yaml"
+        user_path = self.root / ".gleamlet/config.yaml"
         new_root = self.root / "relocated-study"
         settings = self.load(user_config_path=user_path)
         settings.update(project_root=new_root).save()
 
-        reloaded = NEETMLConfig.load(
+        reloaded = GleamletConfig.load(
             default_config_path=self.default_path,
             user_config_path=user_path,
         )
         self.assertEqual(reloaded.project_root, new_root.resolve())
 
     def test_year_range_naming_updates_and_persists_registry(self) -> None:
-        user_path = self.root / ".neetml/config.yaml"
+        user_path = self.root / ".gleamlet/config.yaml"
         settings = self.load(user_config_path=user_path)
 
         settings.update(
@@ -277,7 +304,7 @@ class ConfigTests(unittest.TestCase):
         )
 
     def test_stable_longitudinal_name_is_used_without_year_range(self) -> None:
-        user_path = self.root / ".neetml/config.yaml"
+        user_path = self.root / ".gleamlet/config.yaml"
         settings = self.load(user_config_path=user_path)
 
         configured_path = settings.get_path("model_input")
@@ -285,7 +312,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(configured_path.name, "longitudinal.parquet")
 
     def test_longitudinal_naming_rejects_ambiguous_or_non_parquet_input(self) -> None:
-        settings = self.load(user_config_path=self.root / ".neetml/config.yaml")
+        settings = self.load(user_config_path=self.root / ".gleamlet/config.yaml")
 
         with self.assertRaises(ValueError):
             settings.update(
@@ -297,7 +324,7 @@ class ConfigTests(unittest.TestCase):
             settings.update(dataset="model_input", filename="custom.csv")
 
     def test_reset_removes_user_config_and_restores_defaults(self) -> None:
-        user_path = self.root / ".neetml/config.yaml"
+        user_path = self.root / ".gleamlet/config.yaml"
         settings = self.load(user_config_path=user_path)
         settings.update(
             dataset="model_input",
@@ -313,10 +340,10 @@ class ConfigTests(unittest.TestCase):
         )
 
     def test_config_changes_are_logged(self) -> None:
-        user_path = self.root / ".neetml/config.yaml"
+        user_path = self.root / ".gleamlet/config.yaml"
         settings = self.load(user_config_path=user_path)
 
-        with self.assertLogs("neetml.config", level="INFO") as logs:
+        with self.assertLogs("gleamlet.config", level="INFO") as logs:
             settings.update(data_dir="/secure/data").save()
             settings.reset()
 

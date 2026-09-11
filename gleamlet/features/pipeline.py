@@ -10,7 +10,7 @@ import zipfile
 import io
 from pathlib import Path
 from typing import Literal, Union
-from ..config import NEETMLConfig
+from ..config import GleamletConfig
 
 from ..utils.misc import (
     styled_print,
@@ -72,7 +72,7 @@ class FeatureEngineer:
             "external": EXT_COL_PREFIX,
         },
         overwrite: bool = False,
-        settings: NEETMLConfig | None = None,
+        settings: GleamletConfig | None = None,
     ):
         """
         Initializes the FeatureEngineer with input, external and output paths.
@@ -91,7 +91,7 @@ class FeatureEngineer:
         - overwrite: Whether to overwrite existing files when saving outputs.
         """
         
-        settings = settings or NEETMLConfig.load()
+        settings = settings or GleamletConfig.load()
         self.settings = settings
         self.output_data_path = settings.get_path("model_input")
         if output_filename is not None:

@@ -1,13 +1,13 @@
 from pathlib import Path
 from rich import print
 
-from ..config import NEETMLConfig
+from ..config import GleamletConfig
 from .misc import parse_yaml
 
 # ----------------------------------------------------------------------
 # Default Path
 # ----------------------------------------------------------------------
-_SETTINGS = NEETMLConfig.load()
+_SETTINGS = GleamletConfig.load()
 PROJECT_ROOT = _SETTINGS.project_root
 PKG_ROOT = Path(__file__).resolve().parent.parent
 

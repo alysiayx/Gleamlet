@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Union, List, Literal, Dict
 from rich import print
 
-from ..config import NEETMLConfig
+from ..config import GleamletConfig
 from ..utils.misc import (
     load_dataframe,
     make_output_dir,
@@ -73,7 +73,7 @@ class DataPreprocessor:
         merge_dir: str = "2_merged",
         overwrite: bool = False,
         file_naming_format: list = None,
-        settings: NEETMLConfig | None = None,
+        settings: GleamletConfig | None = None,
     ):
         """
         Initializes DataPreprocessor with the data preparation paths and options.
@@ -96,7 +96,7 @@ class DataPreprocessor:
             Default: ["cohort_y11_ay", "data_category" , "cohort_yg_ay", "year_group"].
         """
         
-        self.settings = settings or NEETMLConfig.load()
+        self.settings = settings or GleamletConfig.load()
 
         default_paths = {
             "file_metadata_path": self.settings.get_path("file_meta_path"),

@@ -7,21 +7,21 @@ from unittest.mock import Mock, patch
 
 import pandas as pd
 
-from neetml.config import NEETMLConfig
-from neetml.features import FeatureEngineer
-from neetml.preprocessing import DataPreprocessor
-from neetml.preprocessing.modules._merging_utils import merge_one_item_group
-from neetml.utils.constants import FileMetadata
-from neetml.utils.misc import make_output_dir
+from gleamlet.config import GleamletConfig
+from gleamlet.features import FeatureEngineer
+from gleamlet.preprocessing import DataPreprocessor
+from gleamlet.preprocessing.modules._merging_utils import merge_one_item_group
+from gleamlet.utils.constants import FileMetadata
+from gleamlet.utils.misc import make_output_dir
 
 
 class DataPathIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.project_root = Path(self.temporary_directory.name).resolve()
-        self.config = NEETMLConfig.load(
+        self.config = GleamletConfig.load(
             project_root=self.project_root,
-            user_config_path=self.project_root / ".neetml/config.yaml",
+            user_config_path=self.project_root / ".gleamlet/config.yaml",
         )
 
     def tearDown(self) -> None:
@@ -114,8 +114,8 @@ class DataPathIntegrationTests(unittest.TestCase):
             captured.update(kwargs)
 
         with (
-            patch("neetml.preprocessing.pipeline.load_dataframe", return_value=metadata),
-            patch("neetml.preprocessing.pipeline._merge_data", side_effect=fake_merge),
+            patch("gleamlet.preprocessing.pipeline.load_dataframe", return_value=metadata),
+            patch("gleamlet.preprocessing.pipeline._merge_data", side_effect=fake_merge),
         ):
             curator.merge_data(
                 use_file_metadata="metadata.xlsx",
@@ -130,7 +130,7 @@ class DataPathIntegrationTests(unittest.TestCase):
             curator.settings.get_path("prepared"),
             expected,
         )
-        reloaded = NEETMLConfig.load(
+        reloaded = GleamletConfig.load(
             project_root=self.project_root,
             user_config_path=self.config.user_config_path,
         )
@@ -155,8 +155,8 @@ class DataPathIntegrationTests(unittest.TestCase):
             captured.update(kwargs)
 
         with (
-            patch("neetml.preprocessing.pipeline.load_dataframe", return_value=metadata),
-            patch("neetml.preprocessing.pipeline._merge_data", side_effect=fake_merge),
+            patch("gleamlet.preprocessing.pipeline.load_dataframe", return_value=metadata),
+            patch("gleamlet.preprocessing.pipeline._merge_data", side_effect=fake_merge),
         ):
             curator.merge_data(
                 use_file_metadata="metadata.xlsx",
@@ -181,10 +181,10 @@ class DataPathIntegrationTests(unittest.TestCase):
 
         with (
             patch(
-                "neetml.preprocessing.modules._merging_utils.validate_merged_data"
+                "gleamlet.preprocessing.modules._merging_utils.validate_merged_data"
             ),
-            patch("neetml.preprocessing.modules._merging_utils.print_table"),
-            patch("neetml.preprocessing.modules._merging_utils.plot_group_heatmap"),
+            patch("gleamlet.preprocessing.modules._merging_utils.print_table"),
+            patch("gleamlet.preprocessing.modules._merging_utils.plot_group_heatmap"),
         ):
             merge_one_item_group(
                 items,

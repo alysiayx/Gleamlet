@@ -12,7 +12,7 @@ if [ -z "${CONDA_PREFIX:-}" ]; then
     exit 1
 fi
 
-echo "Installing NEETML into the active Conda environment: ${CONDA_PREFIX}"
+echo "Installing Gleamlet into the active Conda environment: ${CONDA_PREFIX}"
 poetry install
 
-echo "Setup is complete. Keep the Conda environment active when using NEETML."
+echo "Setup is complete. Keep the Conda environment active when using Gleamlet."

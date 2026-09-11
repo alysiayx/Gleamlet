@@ -31,7 +31,7 @@ paths:
     path: col_metadata.xlsx
 
   # Step-by-step data products. Each path follows processed_dir unless
-  # the user overrides that stage explicitly in .neetml/config.yaml.
+  # the user overrides that stage explicitly in .gleamlet/config.yaml.
   cleaned_dir:                            # Validated and cleaned source files.
     base: processed_dir
     path: 1_cleaned

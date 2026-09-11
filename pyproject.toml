@@ -1,14 +1,14 @@
 [tool.poetry]
-name = "neetml"
-version = "0.1.0rc2"
+name = "gleamlet"
+version = "0.1.0rc3"
 description = "predicting NEET risk using machine learning"
 authors = ["Yanhau Xu"]
 license = "MIT"
 readme = "README.md"
 homepage = "https://github.com/alysiayx/neetml"
 repository = "https://github.com/alysiayx/neetml"
-packages = [{ include = "neetml" }]
-include = ["neetml/configs/*.yaml"]
+packages = [{ include = "gleamlet" }]
+include = ["gleamlet/configs/*.yaml"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Education",

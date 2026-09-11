@@ -1,7 +1,7 @@
-from .config import NEETMLConfig
+from .config import GleamletConfig, NEETMLConfig
 
 __all__ = [
-    "NEETMLConfig",
+    "GleamletConfig",
     "DataPreprocessor",
     "FeatureEngineer",
 ]
