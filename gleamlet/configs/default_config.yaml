@@ -59,7 +59,7 @@ paths:
 
 datasets:
   sample:                                 # Synthetic data for code validation.
-    dir: guide_notebook
+    dir: docs/notebooks
     file: sample.parquet
   prepared:                               # Data-preparation output and feature-engineering input.
     # Point dir to merged_dir when merging is the final preparation step.

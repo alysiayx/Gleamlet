@@ -24,5 +24,5 @@
 /_Other Documents
 
 *.parquet
-/guide_notebook/experiment_outputs/
+/docs/notebooks/experiment_outputs/
 /guide_installation/poetry (to be tested)/$
