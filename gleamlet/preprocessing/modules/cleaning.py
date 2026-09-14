@@ -1,3 +1,4 @@
+import io
 import logging
 import pandas as pd
 from pathlib import Path
@@ -7,7 +8,7 @@ from rich.progress import Progress
 from rich.panel import Panel
 
 from ...utils.misc import (
-    styled_print, 
+    styled_print,
     load_dataframe, 
     get_files_in_folder, 
     check_folder_file_count_equal,
@@ -24,6 +25,7 @@ from ...utils.logger_setup import (
     log_with_border, 
     log_line_break
 )
+from ...utils.verbosity import routine_output_enabled
 
 from ..modules._metadata_utils import (
     update_col_metadata_entry,
@@ -31,7 +33,21 @@ from ..modules._metadata_utils import (
 )
 
 logger = get_logger("data_processor")
+cleaning_detail_logger = get_logger("data_cleaning", console=False)
 # logger = logging.getLogger(__name__) 
+
+
+def _routine_console() -> Console:
+    if routine_output_enabled():
+        return Console()
+    return Console(file=io.StringIO(), force_jupyter=False)
+
+
+def _report(message: str, *args, console: Console | None = None) -> None:
+    cleaning_detail_logger.info(message, *args)
+    if routine_output_enabled():
+        styled_print(message % args if args else message, console=console)
+
 
 def remove_data(
     df: pd.DataFrame,
@@ -99,7 +115,7 @@ def remove_data(
         The DataFrame containing the removed data.
     """
 
-    console = Console()
+    console = _routine_console()
     removed_data = pd.DataFrame()
     
     ################################################ 
@@ -107,15 +123,14 @@ def remove_data(
     if rm_empty_cols:
         nan_columns = df.columns[df.isna().all()].tolist()
         if nan_columns:
-            styled_print(f"- Columns with all NaN values found and removed:", console=console)
-            print(nan_columns)
+            _report("Columns with all NaN values found and removed: %s", nan_columns, console=console)
             df = df.dropna(axis=1, how='all')
 
     ################################################ 
     # Report and remove duplicate rows
     duplicates = df[df.duplicated(keep=False)]
     if not duplicates.empty:
-        styled_print(f"- Duplicate rows detected:", console=console)
+        _report("Duplicate rows detected", console=console)
         print_table(duplicates, console)
 
         if rm_dups_threshold == 'first':
@@ -123,7 +138,7 @@ def remove_data(
             duplicates_to_remove = df[df.duplicated(keep='first')]
             removed_data = pd.concat([removed_data, duplicates_to_remove])
             df = df.drop(duplicates_to_remove.index)
-            styled_print("- Keeping only the first instance of each duplicate row", console=console)
+            _report("Keeping only the first instance of each duplicate row", console=console)
         # elif isinstance(rm_dups_threshold, float):
         #     # Compute NaN percentage for each duplicate row
         #     nan_percentage = duplicates.isna().sum(axis=1) / len(duplicates.columns)
@@ -149,11 +164,11 @@ def remove_data(
     if rm_nan_stud_id and stud_id_col in df.columns:
         nan_stud_id_rows = df[df[stud_id_col].isna()]
         if not nan_stud_id_rows.empty:
-            styled_print(f"- Rows with missing {stud_id_col} values detected:", console=console)
+            _report("Rows with missing %s values detected", stud_id_col, console=console)
             print_table(nan_stud_id_rows, console=console)
             removed_data = pd.concat([removed_data, nan_stud_id_rows])
             df = df.dropna(subset=[stud_id_col])
-            styled_print(f"- Rows with missing {stud_id_col} values have been removed.", console=console)
+            _report("Rows with missing %s values have been removed", stud_id_col, console=console)
 
     ################################################ 
     # Remove rows with problematic student IDs
@@ -164,7 +179,7 @@ def remove_data(
         if not problematic_rows.empty:
             removed_data = pd.concat([removed_data, problematic_rows])
             df = df[~df[stud_id_col].isin(rm_problematic_ids)]
-            styled_print(f"- Problematic student IDs found and removed:", console=console)
+            _report("Problematic student IDs found and removed", console=console)
             print_table(problematic_rows, console=console)
 
     ################################################ 
@@ -174,8 +189,7 @@ def remove_data(
         if columns_to_remove:
             df = df.drop(columns=columns_to_remove)
             # styled_print(f"- Removing sensitive columns: {', '.join(columns_to_remove)}", console=console)
-            styled_print("- Removing sensitive columns: ", console=console)
-            print(columns_to_remove)
+            _report("Removing sensitive columns: %s", columns_to_remove, console=console)
     
     ################################################       
     # Remove constant columns
@@ -185,15 +199,13 @@ def remove_data(
             constant_columns_local = [col for col in df.columns if df[col].nunique(dropna=False) == 1]
             if constant_columns_local:
                 df = df.drop(columns=constant_columns_local)
-                styled_print("- Removing locally constant columns: ", console=console)
-                print(constant_columns_local)
+                _report("Removing locally constant columns: %s", constant_columns_local, console=console)
         elif isinstance(rm_constant_cols, list):
             # Remove columns specified in the list
             constant_columns_global = [col for col in rm_constant_cols if col in df.columns]
             if constant_columns_global:
                 df = df.drop(columns=constant_columns_global)
-                styled_print("- Removing 'global' constant columns: ", console=console)
-                print(constant_columns_global)
+                _report("Removing global constant columns: %s", constant_columns_global, console=console)
         else:
             logger.warning(f"Invalid value for rm_constant_cols: {rm_constant_cols}")
     
@@ -202,13 +214,15 @@ def remove_data(
     if isinstance(rm_nan_cols_threshold, float):
         columns_to_remove = df.columns[df.isna().mean() > rm_nan_cols_threshold].tolist()
         if columns_to_remove:
-            styled_print(
-                f"- Removing {len(columns_to_remove)} column(s) with more than {rm_nan_cols_threshold*100:.0f}% missing values:",
-                console=console
+            _report(
+                "Removing %d column(s) with more than %.0f%% missing values: %s",
+                len(columns_to_remove),
+                rm_nan_cols_threshold * 100,
+                columns_to_remove,
+                console=console,
             )
             df = df.drop(columns=columns_to_remove)
             # styled_print(f"  Columns removed: {', '.join(columns_to_remove)}", console=console)
-            print(columns_to_remove)
     
     if rm_nan_cols_threshold:
         # Calculate missing value ratio for each column
@@ -228,7 +242,7 @@ def remove_data(
                 f"{len(columns_to_remove)} column(s) have more than 80% missing values, consider removing them:"
             )
 
-            styled_print("Columns with more than 80% missing values:")
+            _report("Columns with more than 80%% missing values", console=console)
             print_table(missing_df, group_records=False, num_cols='all', num_rows='all', console=console)
     
     ################################################ 
@@ -237,7 +251,10 @@ def remove_data(
     num_dup_stud = len(df[df.duplicated(subset=[stud_id_col], keep='first')])
     if num_dup_stud > 0:
         logger.warning(f"Number of students have multiple records: {num_dup_stud}")
-        styled_print(f"- Duplicate student IDs found. Consider merging them in the following process:", console=console)
+        _report(
+            "Duplicate student IDs found; consider merging them in the following process",
+            console=console,
+        )
         print_table(duplicated_stud_id, console=console)
     
     return df, removed_data
@@ -298,6 +315,7 @@ def identify_globally_constant_columns(
     """
 
     NON_CONSTANT_MARKER = "NonConstant"
+    console = _routine_console()
 
     files = get_files_in_folder(folder_path=data_dir, recursive=True)
     
@@ -316,10 +334,10 @@ def identify_globally_constant_columns(
         return ', '.join(top_5) + omitted_info
 
     if not files:
-        styled_print(f'No files were found under {data_dir}.')
+        _report("No files were found under %s", data_dir)
         return []
 
-    with Progress() as progress:
+    with Progress(console=Console(stderr=True)) as progress:
         task = progress.add_task("[cyan bold]Scanning files...[/]", total=len(files))
         for file_path in files:
             progress.update(task, description=f"[cyan bold]Scanning: {file_path.name}[/]") 
@@ -451,18 +469,18 @@ def identify_globally_constant_columns(
         df_g = pd.DataFrame(remove_cols, columns=printout_cols)
         df_g.drop_duplicates(inplace=True)
         
-        styled_print(
+        _report(
             f'- The following {len(df_g)} variables are considered global constants as their top constant value proportion (> {consistency_cutoff*100}%) is satisfied'
             + (f', and their missing proportion exceeds {missing_cutoff*100}%.' if consider_missing else '.')
         )
         df_g['pct'] = df_g['Proportion Of Constant Files'].apply(lambda x: float(x.split('%')[0]))
         df_g = df_g.sort_values(by='pct', ascending=False).drop(columns='pct')
-        print_table(df_g, num_rows=len(remove_cols))
+        print_table(df_g, num_rows=len(remove_cols), console=console)
     else:
-        styled_print('No global constant variables found.')
+        _report("No global constant variables found")
     
     if mid_range_cols_with_values:
-        styled_print(
+        _report(
             f'- The following {len(mid_range_cols_with_values)} variables have a mid-range top constant value proportion (i.e., > 50% but < {consistency_cutoff*100}%). '
             'These may warrant further review:'
         )
@@ -470,9 +488,12 @@ def identify_globally_constant_columns(
         df_m.drop_duplicates(inplace=True)
         df_m['pct'] = df_m['Proportion Of Constant Files'].apply(lambda x: float(x.split('%')[0]))
         df_m = df_m.sort_values(by='pct', ascending=False).drop(columns='pct')
-        print_table(df_m, num_rows=len(mid_range_cols_with_values))
+        print_table(df_m, num_rows=len(mid_range_cols_with_values), console=console)
     else:
-        styled_print(f'No mid-range variables found (> 50% but < {consistency_cutoff*100}%).')
+        _report(
+            "No mid-range variables found (> 50%% but < %.1f%%)",
+            consistency_cutoff * 100,
+        )
         
     explanations = {
         "Global Value Distribution": (
@@ -492,7 +513,7 @@ def identify_globally_constant_columns(
     }
     
     for col_name, explanation in explanations.items():
-        styled_print(f"{col_name}: {explanation}")
+        _report("%s: %s", col_name, explanation)
 
     return global_constant_columns
 
@@ -613,7 +634,7 @@ def clean_data(
                     
         files = get_files_in_folder(folder_path=input_path, recursive=True)
 
-        with Progress() as progress:
+        with Progress(console=Console(stderr=True)) as progress:
             task = progress.add_task("[cyan bold]Cleaning files...[/]", total=len(files))
             for file_path in files:
 
@@ -693,6 +714,5 @@ def clean_data(
         # update column metadata, remove the column name that not exist in cleaned data
         extract_col_metadata(col_meta_cleaned, col_metadata_path)
     
-    styled_print("Data cleaning process completed.", colour='magenta')
+    _report("Data cleaning process completed")
     return None
-    

@@ -16,6 +16,12 @@ _VERBOSE_OVERRIDE: ContextVar[bool | int | None] = ContextVar(
 )
 
 
+def routine_output_enabled() -> bool:
+    """Return whether routine output is enabled in the current call context."""
+    requested = _VERBOSE_OVERRIDE.get()
+    return True if requested is None else bool(requested)
+
+
 @contextmanager
 def _user_output(logger: logging.Logger | None, verbose: bool | int):
     """Hide routine console output while preserving warnings and errors."""

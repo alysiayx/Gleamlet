@@ -55,7 +55,12 @@ simple_formatter = colorlog.ColoredFormatter(
     style='%'
 )
 
-def get_logger(name: str = "logs", log_dir: Union[str, Path, None] = None) -> logging.Logger:
+def get_logger(
+    name: str = "logs",
+    log_dir: Union[str, Path, None] = None,
+    *,
+    console: bool = True,
+) -> logging.Logger:
     
     level = get_log_level()
     
@@ -66,9 +71,10 @@ def get_logger(name: str = "logs", log_dir: Union[str, Path, None] = None) -> lo
 
     logger.setLevel(level)
 
-    console_handler = colorlog.StreamHandler(sys.stdout)
-    console_handler.setFormatter(default_formatter)
-    logger.addHandler(console_handler)
+    if console:
+        console_handler = colorlog.StreamHandler(sys.stdout)
+        console_handler.setFormatter(default_formatter)
+        logger.addHandler(console_handler)
 
     log_path = Path(log_dir) if log_dir else LOGS_DIR
     log_path.mkdir(parents=True, exist_ok=True)
