@@ -3,6 +3,7 @@ import numpy as np
 import re
 import logging
 import janitor
+import tempfile
 from pathlib import Path
 from typing import Union
 from tabulate import tabulate
@@ -380,9 +381,24 @@ def standardise_fnames_colnames(
                             # pd.testing.assert_frame_equal(
                             #     df_original, df.set_axis(df_original.columns, axis=1), check_exact=True)
                             
-                            # Write to Excel
-                            with pd.ExcelWriter(output_file_path, engine='openpyxl') as writer:
-                                df.to_excel(writer, sheet_name=sheet_name or 'Sheet1', index=False)
+                            # Write in the destination directory, then atomically replace the
+                            # final path. A failed/interrupted Excel write must not leave a
+                            # truncated output file or destroy a previously valid one.
+                            with tempfile.NamedTemporaryFile(
+                                dir=output_path,
+                                prefix=f".{output_file_path.stem}.",
+                                suffix=".tmp.xlsx",
+                                delete=False,
+                            ) as temporary_file:
+                                temporary_output_path = Path(temporary_file.name)
+
+                            try:
+                                with pd.ExcelWriter(temporary_output_path, engine='openpyxl') as writer:
+                                    df.to_excel(writer, sheet_name=sheet_name or 'Sheet1', index=False)
+                                temporary_output_path.replace(output_file_path)
+                            except BaseException:
+                                temporary_output_path.unlink(missing_ok=True)
+                                raise
                         else:
                             logger.warning(
                                 f"The data category and cohort information of '{raw_filename}"
