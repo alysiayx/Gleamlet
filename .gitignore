@@ -13,7 +13,7 @@
 *.pyc
 /dist/
 /*.egg-info/
-/logs/*.log
+/outputs/logs/*.log
 /_Old/data (2024-09-10)
 /data/02. processed/profiles
 *data*/

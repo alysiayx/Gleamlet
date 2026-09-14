@@ -40,7 +40,10 @@ class ConfigTests(unittest.TestCase):
                             "base": "processed_dir",
                             "path": "5_aggregated",
                         },
-                        "experiments_dir": "artifacts/experiments",
+                        "outputs_dir": "outputs",
+                        "logs_dir": "outputs/logs",
+                        "models_dir": "outputs/models",
+                        "experiments_dir": "outputs/experiments",
                     },
                     "datasets": {
                         "prepared": {
@@ -96,6 +99,14 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(
             settings.get_path("cleaned_dir"),
             self.project_root / "data/02_processed/1_cleaned",
+        )
+        self.assertEqual(
+            settings.get_path("logs_dir"),
+            self.project_root / "outputs/logs",
+        )
+        self.assertEqual(
+            settings.get_path("models_dir"),
+            self.project_root / "outputs/models",
         )
 
     def test_unknown_registry_names_are_rejected(self) -> None:

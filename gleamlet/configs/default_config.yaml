@@ -51,11 +51,12 @@ paths:
     base: processed_dir
     path: profiles
 
-  # Model and reporting outputs.
-  artifacts_dir: artifacts                # Root for generated project outputs.
-  models_dir: artifacts/models            # Fitted models and model metadata.
-  reports_dir: artifacts/reports          # Tables, figures and reports.
-  experiments_dir: artifacts/experiments  # Profile-isolated experiment outputs.
+  # Generated project outputs.
+  outputs_dir: outputs                     # Root for generated project outputs.
+  logs_dir: outputs/logs                   # Application and pipeline logs.
+  models_dir: outputs/models               # Fitted models and model metadata.
+  reports_dir: outputs/reports             # Tables, figures and reports.
+  experiments_dir: outputs/experiments     # Profile-isolated experiment outputs.
 
 datasets:
   sample:                                 # Synthetic data for code validation.

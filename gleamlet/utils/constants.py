@@ -14,7 +14,7 @@ PKG_ROOT = Path(__file__).resolve().parent.parent
 BASE_DATA_DIR = _SETTINGS.get_path("data_dir")
 
 # Logs
-LOGS_DIR = PROJECT_ROOT / "logs"
+LOGS_DIR = _SETTINGS.get_path("logs_dir")
 
 DATA_MANIFEST_PATH = PKG_ROOT / "configs" / "data_manifest.yaml"
 
