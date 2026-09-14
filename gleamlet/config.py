@@ -10,6 +10,8 @@ from typing import Any, Iterable, Mapping
 
 import yaml
 
+from .utils.verbosity import control_class_verbosity
+
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "configs" / "default_config.yaml"
 logger = logging.getLogger(__name__)
@@ -64,6 +66,7 @@ def _resolve(root: Path, value: str | Path) -> Path:
     return path.resolve() if path.is_absolute() else (root / path).resolve()
 
 
+@control_class_verbosity(logger)
 class GleamletConfig:
     """Combine repository defaults with optional user settings.
 
@@ -79,12 +82,14 @@ class GleamletConfig:
         config: dict[str, Any],
         user_config: dict[str, Any],
         project_root: Path,
+        verbose: bool = True,
     ) -> None:
         self.default_config_path = default_config_path
         self.user_config_path = user_config_path
         self._config = config
         self._user_config = user_config
         self.project_root = project_root
+        self.verbose = verbose
 
     @classmethod
     def load(
@@ -93,6 +98,7 @@ class GleamletConfig:
         project_root: str | Path | None = None,
         default_config_path: str | Path | None = None,
         user_config_path: str | Path | None = None,
+        verbose: bool = True,
     ) -> "GleamletConfig":
         """Load defaults and apply an optional user configuration.
 
@@ -131,6 +137,7 @@ class GleamletConfig:
             config=config,
             user_config=user_config,
             project_root=root,
+            verbose=verbose,
         )
 
     @property
@@ -213,7 +220,7 @@ class GleamletConfig:
             return data_dir / filename
         raise KeyError(f"Unknown path or dataset: {name!r}")
 
-    def profile(self, name: str) -> dict[str, Any]:
+    def profile(self, name: str, *, verbose: bool | None = None) -> dict[str, Any]:
         """Return a profile such as ``sample`` or ``real``.
 
         Example
@@ -233,6 +240,7 @@ class GleamletConfig:
         path: str | Path | None = None,
         env_var: str | None = None,
         as_dict: bool = False,
+        verbose: bool | None = None,
     ):
         """Resolve one key or display several paths.
 
@@ -297,6 +305,7 @@ class GleamletConfig:
         folder: str | Path | None = None,
         filename: str | None = None,
         year_range: tuple[int, int] | None = None,
+        verbose: bool | None = None,
     ) -> "GleamletConfig":
         """Apply user settings; call ``save()`` to persist them.
 
@@ -373,7 +382,7 @@ class GleamletConfig:
         logger.info("Updated user configuration: %s", ", ".join(changes))
         return self
 
-    def save(self) -> Path:
+    def save(self, *, verbose: bool | None = None) -> Path:
         """Write user settings without changing the repository defaults.
 
         Example
@@ -387,7 +396,7 @@ class GleamletConfig:
         logger.info("Saved user configuration: %s", self.user_config_path)
         return self.user_config_path
 
-    def reset(self) -> "GleamletConfig":
+    def reset(self, *, verbose: bool | None = None) -> "GleamletConfig":
         """Delete user settings and restore repository defaults.
 
         Environment variables remain active because they are temporary overrides,

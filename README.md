@@ -41,6 +41,17 @@ Import the public API from the new package namespace:
 from gleamlet import DataPreprocessor, FeatureEngineer, GleamletConfig
 ```
 
+Every public callable accepts `verbose`. Set it on a workflow object to choose
+the default for later method calls, or override it for one operation:
+
+```python
+preprocessor = DataPreprocessor(settings=settings, verbose=False)
+preprocessor.standardise_fnames_colnames(verbose=True)
+```
+
+With `verbose=False`, routine console messages and progress displays are hidden;
+warnings and errors are still shown, and file logging remains enabled.
+
 ### Migrating from NEETML
 
 Replace the installed distribution and update imports:

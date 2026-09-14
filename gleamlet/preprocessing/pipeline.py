@@ -22,6 +22,7 @@ from ..utils.logger_setup import (
     log_with_border, 
     log_line_break
 )
+from ..utils.verbosity import control_class_verbosity
 
 from ._utils import (
     validate_file_naming_format,
@@ -58,6 +59,7 @@ logger = get_logger("data_processor")
 # Potential BUG: I moved hardcoded metadata keys, such as 'Year Cohort', to constants.py for better maintainability. The replacement was done via a global search and replace, which may introduce unintended errors.
 # Potential BUG: The code currently uses a hardcoded data category (e.g., if data_category == 'ks2'), which means if the configuration file changes the category name, this condition will fail and cause unintended behavior or errors. So the category name should be retrieved dynamically from the configuration file to ensure flexibility and prevent breakage when the config is updated.
 
+@control_class_verbosity(logger)
 class DataPreprocessor:
     def __init__(
         self,
@@ -74,6 +76,7 @@ class DataPreprocessor:
         overwrite: bool = False,
         file_naming_format: list = None,
         settings: GleamletConfig | None = None,
+        verbose: bool = True,
     ):
         """
         Initializes DataPreprocessor with the data preparation paths and options.
@@ -145,6 +148,7 @@ class DataPreprocessor:
             setattr(self, key, Path(path))
 
         self.overwrite = overwrite
+        self.verbose = verbose
         
         self.file_naming_format = (
             file_naming_format 
@@ -173,6 +177,7 @@ class DataPreprocessor:
             list
         ],
         as_dict: bool = False,
+        verbose: bool | None = None,
     ) -> Union[Path, dict, pd.DataFrame]:
         """
         Retrieve the appropriate data path based on the specified data type.
@@ -261,6 +266,7 @@ class DataPreprocessor:
     def set_file_naming_format(
         self,
         file_naming_format: list,
+        verbose: bool | None = None,
     ) -> None:
         """
         Set the file naming format.
@@ -286,6 +292,7 @@ class DataPreprocessor:
     
     def get_file_naming_format(
         self,
+        verbose: bool | None = None,
     ):
         """Return the file_naming_format."""
         return self.file_naming_format
@@ -298,6 +305,7 @@ class DataPreprocessor:
         self, 
         folder_path: Union[str, Path],
         file_naming_format: list = None,
+        verbose: bool | None = None,
     ) -> pd.DataFrame:
         """
         Generate a file metadata DataFrame by extracting details from standardised file names.
@@ -332,7 +340,8 @@ class DataPreprocessor:
         output_path: Union[str, Path] = None,
         overwrite: bool = None,
         display_upload_status: bool = True,
-        has_processed: bool = False
+        has_processed: bool = False,
+        verbose: bool | None = None,
     ) -> pd.DataFrame:
         """
         Generate a file metadata DataFrame with detailed information about each
@@ -416,7 +425,8 @@ class DataPreprocessor:
         col_metadata_path: Union[str, Path] = None,
         file_naming_format: list = None,
         add_prefix: bool = True,
-        overwrite: bool = None
+        overwrite: bool = None,
+        verbose: bool | None = None,
     ) -> None:
         """
         Standardises file names and column names based on standardise_colnames_rule in YAML file.
@@ -508,6 +518,7 @@ class DataPreprocessor:
         folder_path: Union[str, Path],
         validate_dup_file: bool = True,
         common_cols_threshold: float = 0.8,
+        verbose: bool | None = None,
     ) -> None:
         """
         Validate the data in the folder for column name consistency and duplicate data.
@@ -568,7 +579,8 @@ class DataPreprocessor:
         rm_sensitive_cols: List[str] = None,
         output_path: Union[str, Path] = None,
         col_metadata_path: Union[str, Path] = None,
-        overwrite: bool = None
+        overwrite: bool = None,
+        verbose: bool | None = None,
     ) -> None:
         """
         Clean the data by performing the following actions:
@@ -686,6 +698,7 @@ class DataPreprocessor:
         yaml_data: Dict[str, Dict[str, Union[str, List[Dict[str, str]]]]] = None,
         input_path: Union[str, Path] = None,
         output_path: Union[str, Path] = None,
+        verbose: bool | None = None,
     ) -> Dict[str, pd.DataFrame]:
         """
         Append descriptions and values information to each sheet in col_metadata from multiple metadata sources.
@@ -750,6 +763,7 @@ class DataPreprocessor:
         self,
         col_metadata: Dict[str, pd.DataFrame] = None,
         output_path: Union[str, Path] = None,
+        verbose: bool | None = None,
     ) -> Dict[str, pd.DataFrame]:
         """
         Curate the data types for specified columns in col_metadata and update with curated data types.
@@ -797,6 +811,7 @@ class DataPreprocessor:
         progress_bar: bool = False,
         title: str = None,
         output_prefix: str = None,
+        verbose: bool | None = None,
     ) -> None:
         """
         Generate a data profiling report using either a pandas DataFrame or by processing all xlsx / csv files 
@@ -899,6 +914,7 @@ class DataPreprocessor:
         grouping_strategy: Literal["flexible", "strict"] = "strict",
         save_tmp_outputs: bool = False,
         overwrite: bool = False,
+        verbose: bool | None = None,
     ) -> None:
         """
         Merge data by Cohort using 'stud_id' and if needed, one additional school-related column pair.

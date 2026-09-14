@@ -36,6 +36,7 @@ from ..utils.logger_setup import (
     log_with_border, 
     log_line_break
 )
+from ..utils.verbosity import control_class_verbosity
 
 from .modules.linking import (
     add_iod as _add_iod,
@@ -57,6 +58,7 @@ from .modules.derivation import (
 logger = get_logger("feature_engineering")
 
 
+@control_class_verbosity(logger)
 class FeatureEngineer:
     def __init__(
         self,
@@ -73,6 +75,7 @@ class FeatureEngineer:
         },
         overwrite: bool = False,
         settings: GleamletConfig | None = None,
+        verbose: bool = True,
     ):
         """
         Initializes the FeatureEngineer with input, external and output paths.
@@ -138,6 +141,7 @@ class FeatureEngineer:
         self.derive_data_dir = resolve_stage(derive_dir, "derived_dir")
 
         self.overwrite = overwrite
+        self.verbose = verbose
         self.prefix = prefix
         self.input_data_path = settings.get_path(
             "prepared",
@@ -149,7 +153,11 @@ class FeatureEngineer:
     # Utility Functions
     #############################################
         
-    def set_input_data_path(self, path: Union[str, Path, None] = None):
+    def set_input_data_path(
+        self,
+        path: Union[str, Path, None] = None,
+        verbose: bool | None = None,
+    ):
         """Use an explicit dataset path, or reset to the prepared-data registry."""
         self.input_data_path = self.settings.get_path(
             "prepared",
@@ -157,7 +165,13 @@ class FeatureEngineer:
         )
         logger.info(f"Input data path set to '{self.input_data_path}'")
     
-    def set_output_filename(self, name: str, *, save: bool = True):
+    def set_output_filename(
+        self,
+        name: str,
+        *,
+        save: bool = True,
+        verbose: bool | None = None,
+    ):
         """Set the canonical longitudinal filename and update its registry entry."""
         self.settings.update(dataset="model_input", filename=name)
         if save:
@@ -165,7 +179,7 @@ class FeatureEngineer:
         self.output_data_path = self.settings.get_path("model_input")
         logger.info(f"Output filename set to '{self.output_data_path.name}'")
 
-    def get_output_filename(self) -> str:
+    def get_output_filename(self, *, verbose: bool | None = None) -> str:
         return self.output_data_path.name
     
     def get_path(
@@ -175,6 +189,7 @@ class FeatureEngineer:
             list
         ],
         as_dict: bool = False,
+        verbose: bool | None = None,
     ) -> Union[Path, dict, pd.DataFrame]:
         """
         Retrieve the appropriate data path based on the specified data type.
@@ -273,6 +288,7 @@ class FeatureEngineer:
         academic_end_year: int | None = None,
         out_root=None,
         file_format: str = "xlsx",
+        verbose: bool | None = None,
     ):
         log_with_border(logger, "Downloading School Performance and/or Information Data")
         
@@ -297,6 +313,7 @@ class FeatureEngineer:
         source_mapping: dict = ExtRefs.SCHOOL_SRC_MAPPING,
         join_keys: list = ExtRefs.SCHOOL_JOIN_KEYS,
         save_name: str = ExtRefs.SCHOOL_SAVE_NAME,
+        verbose: bool | None = None,
     ) -> pd.DataFrame:
         log_with_border(logger, "Creating School Performance and/or Information Data")
         
@@ -337,6 +354,7 @@ class FeatureEngineer:
         prefix: str = None,
         add_lag_suffix: bool = True,
         overwrite=None,
+        verbose: bool | None = None,
     ) -> pd.DataFrame:
         """
         Link school performance data to student records based on specified reference types and join keys.
@@ -511,7 +529,8 @@ class FeatureEngineer:
         col_imd: str = None,
         col_iod_score_tag: str = ExtRefs.IOD_SCORE_TAG,
         prefix: str = None,
-        overwrite: bool = None
+        overwrite: bool = None,
+        verbose: bool | None = None,
     ) -> pd.DataFrame:
         
         log_with_border(logger, f"Adding IoD features (version {iod_version})")
@@ -580,6 +599,7 @@ class FeatureEngineer:
         gender_kwargs: dict = None,
         school_kwargs: dict = None,
         language_kwargs: dict = None,
+        verbose: bool | None = None,
     ):
         ethnicity_kwargs = ethnicity_kwargs or {}
         gender_kwargs = gender_kwargs or {}
@@ -704,6 +724,7 @@ class FeatureEngineer:
         stud_id_col: str = STUD_ID_COL,
         use_conflict_ids: bool = True,
         overwrite: bool = None,
+        verbose: bool | None = None,
     ):
         
         log_with_border(logger, "Resolving Conflicts")
