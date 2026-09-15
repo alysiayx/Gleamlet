@@ -60,6 +60,7 @@ def remove_data(
     rm_constant_cols: Union[False, Literal['local'], List[str]] = False,
     rm_problematic_ids: Union[Literal[False], int, List[int]] = False,
     rm_sensitive_cols: Union[None, List[str]] = None,
+    source_file: Union[str, Path, None] = None,
 ) -> pd.DataFrame:
     # BUG: rm_dups_threshold: the current code only calculates the missing value proportion for the first duplicate entry and does not account for the missing value proportion for each row of duplicate data.
     """
@@ -105,6 +106,9 @@ def remove_data(
     
     rm_sensitive_cols : Union[None, List[str]], optional
         List of sensitive column names to be removed, by default None.
+
+    source_file : Union[str, Path, None], optional
+        Source file included in cleaning warnings, if provided.
     
     Returns
     -------
@@ -117,6 +121,7 @@ def remove_data(
 
     console = _routine_console()
     removed_data = pd.DataFrame()
+    warning_prefix = f"[{source_file}] " if source_file is not None else ""
     
     ################################################ 
     # Report and remove columns with all NaN values
@@ -157,7 +162,7 @@ def remove_data(
         #         df = df.drop(duplicates_to_remove.index)
         #         styled_print("- NaN threshold not exceeded; keeping the first instance of each duplicate row.", console=console)
         else:
-            logger.warning('Duplicate rows found but were not removed as no valid removal condition was provided.')
+            logger.warning(f'{warning_prefix}Duplicate rows found but were not removed as no valid removal condition was provided.')
     
     ################################################ 
     # Report and remove rows with missing 'stud_id'
@@ -207,7 +212,7 @@ def remove_data(
                 df = df.drop(columns=constant_columns_global)
                 _report("Removing global constant columns: %s", constant_columns_global, console=console)
         else:
-            logger.warning(f"Invalid value for rm_constant_cols: {rm_constant_cols}")
+            logger.warning(f"{warning_prefix}Invalid value for rm_constant_cols: {rm_constant_cols}")
     
     ################################################ 
     # Report and remove columns with more than the specified percentage of NaN values
@@ -239,7 +244,7 @@ def remove_data(
             }).sort_values(by='Missing Ratio (%)', ascending=False)
             
             logger.warning(
-                f"{len(columns_to_remove)} column(s) have more than 80% missing values, consider removing them:"
+                f"{warning_prefix}{len(columns_to_remove)} column(s) have more than 80% missing values, consider removing them:"
             )
 
             _report("Columns with more than 80%% missing values", console=console)
@@ -250,7 +255,7 @@ def remove_data(
     duplicated_stud_id = df[df.duplicated(subset=[stud_id_col], keep=False)].sort_values(by=stud_id_col)
     num_dup_stud = len(df[df.duplicated(subset=[stud_id_col], keep='first')])
     if num_dup_stud > 0:
-        logger.warning(f"Number of students have multiple records: {num_dup_stud}")
+        logger.warning(f"{warning_prefix}Number of students have multiple records: {num_dup_stud}")
         _report(
             "Duplicate student IDs found; consider merging them in the following process",
             console=console,
@@ -662,7 +667,8 @@ def clean_data(
                     rm_empty_cols=rm_empty_cols,
                     rm_constant_cols=constant_columns if rm_constant_cols == 'global' else rm_constant_cols,
                     rm_problematic_ids=rm_problematic_ids,
-                    rm_sensitive_cols=rm_sensitive_cols
+                    rm_sensitive_cols=rm_sensitive_cols,
+                    source_file=file_path.relative_to(input_path),
                 )
                 
                 # Save removed data
