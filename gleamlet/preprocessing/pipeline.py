@@ -581,6 +581,7 @@ class DataPreprocessor:
         col_metadata_path: Union[str, Path] = None,
         overwrite: bool = None,
         verbose: bool | None = None,
+        refresh_constant_cache: bool = False,
     ) -> None:
         """
         Clean the data by performing the following actions:
@@ -651,6 +652,13 @@ class DataPreprocessor:
         overwrite : bool, optional
             If True, existing cleaned files are overwritten. Uses default setting if not provided.
 
+        refresh_constant_cache : bool, optional
+            Force global constant detection again when cleaning runs. Otherwise,
+            reuse the on-disk cache when input files and detection parameters
+            match. File changes are detected by names, sizes and modification
+            times. Independent of overwrite; only applies to global mode.
+            Cache hits skip the detailed detection tables.
+
         Returns
         -------
         None
@@ -683,7 +691,8 @@ class DataPreprocessor:
             output_path=output_path,
             col_metadata_path=col_metadata_path,
             file_naming_format=self.file_naming_format,
-            overwrite=overwrite
+            overwrite=overwrite,
+            refresh_constant_cache=refresh_constant_cache,
         )
         
         return None

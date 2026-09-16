@@ -1,4 +1,5 @@
 import io
+import json
 import logging
 import pandas as pd
 from pathlib import Path
@@ -539,7 +540,8 @@ def clean_data(
     output_path: Union[str, Path] = None,
     col_metadata_path: Union[str, Path] = None,
     file_naming_format: List[str] = None,
-    overwrite: bool = None
+    overwrite: bool = None,
+    refresh_constant_cache: bool = False,
 ) -> None:
     """
     Clean the data by performing the following actions:
@@ -615,6 +617,13 @@ def clean_data(
     overwrite : bool, optional
         If True, existing cleaned files are overwritten. Uses default setting if not provided.
 
+    refresh_constant_cache : bool, optional
+        Force a new global constant scan when cleaning runs. By default, reuse
+        the cached column list if the input directory, file names, sizes,
+        modification times and detection parameters match. The JSON cache is
+        stored beside the output directory. Overwriting cleaned files does not
+        force a new scan. Cache hits skip the detailed detection tables.
+
     Returns
     -------
     None
@@ -628,12 +637,52 @@ def clean_data(
     if overwrite or not check_folder_file_count_equal(input_path, output_path):
     
         if rm_constant_cols == 'global':
-            constant_columns = identify_globally_constant_columns(
-                data_dir=input_path,
-                consistency_cutoff=constant_consistency,
-                missing_cutoff=missing_cutoff,
-                consider_missing=consider_missing
-            )
+            cache_path = output_path.parent / f".{output_path.name}_global_constants.json"
+            # Bump the version when the detection algorithm changes.
+            cache_key = {
+                "version": 1,
+                "input_path": str(Path(input_path).resolve()),
+                "constant_consistency": constant_consistency,
+                "missing_cutoff": missing_cutoff,
+                "consider_missing": consider_missing,
+                "files": [],
+            }
+            for path in sorted(get_files_in_folder(folder_path=input_path, recursive=True)):
+                stat = path.stat()
+                cache_key["files"].append([
+                    str(path.relative_to(input_path)), stat.st_size, stat.st_mtime_ns
+                ])
+
+            constant_columns = None
+            if not refresh_constant_cache:
+                try:
+                    cached = json.loads(cache_path.read_text(encoding="utf-8"))
+                    if (
+                        isinstance(cached, dict)
+                        and cached.get("key") == cache_key
+                        and isinstance(cached.get("columns"), list)
+                        and all(isinstance(col, str) for col in cached["columns"])
+                    ):
+                        constant_columns = cached["columns"]
+                        _report("Using cached global constant columns: %s", cache_path)
+                except (OSError, ValueError):
+                    # A missing or unreadable cache must not prevent cleaning.
+                    pass
+
+            if constant_columns is None:
+                constant_columns = identify_globally_constant_columns(
+                    data_dir=input_path,
+                    consistency_cutoff=constant_consistency,
+                    missing_cutoff=missing_cutoff,
+                    consider_missing=consider_missing
+                )
+                try:
+                    cache_path.write_text(
+                        json.dumps({"key": cache_key, "columns": constant_columns}),
+                        encoding="utf-8",
+                    )
+                except OSError as exc:
+                    logger.warning("Could not save global constant cache %s: %s", cache_path, exc)
         
         col_meta_cleaned = {}
                     
