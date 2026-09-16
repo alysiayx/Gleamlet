@@ -1,6 +1,7 @@
 import pandas as pd
 import re
 import logging
+import os
 from pathlib import Path
 from datetime import datetime
 from typing import List, Tuple, Dict, Optional, Set, Union
@@ -254,6 +255,8 @@ def extract_col_metadata(
     Generates column metadata and saves it in an Excel file. 
     If the metadata file already exists, updates it with any new columns from col_meta 
     and creates a backup of the existing data to preserve previous metadata.
+    If any source column mappings are missing, saves the current extraction to
+    a separate *_draft workbook without changing the original file.
 
     Parameters
     ----------
@@ -286,6 +289,7 @@ def extract_col_metadata(
         
         total_num_updates = 0
         prepared_data = {}
+        incomplete_categories = []
         # Iterate through each data category in col_meta
         for data_category, columns_dict in sorted(col_meta.items()):
             # Prepare data for the new DataFrame
@@ -302,7 +306,10 @@ def extract_col_metadata(
 
             # Check if this data_category already exists in the metadata file
             if data_category in existing_data:
-                df_existing = existing_data[data_category]
+                df_existing = existing_data[data_category].copy()
+                for column in (ColumnMetadata.SRC_NAME, ColumnMetadata.SRC_FILE):
+                    if column not in df_existing:
+                        df_existing[column] = None
 
                 if df_new[ColumnMetadata.SRC_NAME].isna().all(): # which means column names are standarised
                     comparison_columns = [ColumnMetadata.STD_NAME]
@@ -352,14 +359,17 @@ def extract_col_metadata(
                 raise ValueError(f"Duplicate values found in {ColumnMetadata.STD_NAME}. "
                                  "This indicates multiple standardised columns are using the same standardised name.")
 
-            assert not df_metadata[ColumnMetadata.SRC_NAME].isna().all(), (
-                f"{ColumnMetadata.SRC_NAME} column is completely empty in category '{data_category}'. "
-                f"Check that {output_path} contains the source-to-standardised column mapping "
-                "created during naming standardisation."
-            )
+            if df_metadata[ColumnMetadata.SRC_NAME].replace(r'^\s*$', None, regex=True).isna().any():
+                incomplete_categories.append(data_category)
             assert not df_metadata[ColumnMetadata.STD_NAME].isna().all(), f"{ColumnMetadata.STD_NAME} column is completely empty"
 
             prepared_data[data_category] = df_metadata
+
+        if incomplete_categories:
+            output_path = output_path.with_name(
+                f"{output_path.stem}_draft{output_path.suffix}"
+            )
+            mode = 'w'
 
         with pd.ExcelWriter(
             output_path,
@@ -370,8 +380,28 @@ def extract_col_metadata(
             for data_category, df_metadata in prepared_data.items():
                 df_metadata.to_excel(writer, sheet_name=data_category, index=False)
 
+        if incomplete_categories:
+            logger.warning(
+                "Draft metadata saved to %s. Open this file and check the blank "
+                "Source Column cells in sheets: %s. These source-to-standardised "
+                "mappings are incomplete; the requested workbook is unchanged.",
+                output_path.resolve(), ', '.join(incomplete_categories),
+            )
+            # Offer a file link in notebooks without requiring IPython elsewhere.
+            try:
+                from IPython import get_ipython
+                from IPython.display import FileLink, display
+            except ImportError:
+                pass
+            else:
+                if getattr(get_ipython(), 'kernel', None) is not None:
+                    display(FileLink(
+                        os.path.relpath(output_path.resolve(), Path.cwd()),
+                        result_html_prefix="Open draft metadata: ",
+                    ))
+
         # If updates were made, create a backup of the original file
-        if total_num_updates > 0 and existing_data:
+        if total_num_updates > 0 and existing_data and not incomplete_categories:
             create_backup(
                 file_path=output_path,
                 data=existing_data,
