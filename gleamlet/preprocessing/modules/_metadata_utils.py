@@ -274,6 +274,7 @@ def extract_col_metadata(
     """
     
     if col_meta:
+        output_path = Path(output_path)
         # Check if the metadata file already exists
         if output_path.exists():
             # Load existing data from the Excel file
@@ -284,84 +285,91 @@ def extract_col_metadata(
         mode = 'a' if Path(output_path).exists() else 'w'
         
         total_num_updates = 0
+        prepared_data = {}
+        # Iterate through each data category in col_meta
+        for data_category, columns_dict in sorted(col_meta.items()):
+            # Prepare data for the new DataFrame
+            df_new = pd.DataFrame({
+                ColumnMetadata.STD_NAME: list(columns_dict.keys()),  # it should be standardised Column Name
+                ColumnMetadata.SRC_NAME: [v['raw_colname'] for v in columns_dict.values()],
+                ColumnMetadata.DATA_TYPE: [v['first_dtype'] for v in columns_dict.values()],
+                ColumnMetadata.DETECTED_DTYPES: [', '.join(v['all_dtypes']) for v in columns_dict.values()],
+                ColumnMetadata.UNIQUE_COUNT: [len(v['unique_values']) for v in columns_dict.values()],
+                ColumnMetadata.UNIQUE_VALUES: [stringify_unique_values(v['unique_values']) for v in columns_dict.values()],
+                ColumnMetadata.STD_FILE: [', '.join(v['filename']) for v in columns_dict.values()],  # Standardised Filenames
+                ColumnMetadata.SRC_FILE: [', '.join(v['raw_filename']) for v in columns_dict.values()]
+            })
+
+            # Check if this data_category already exists in the metadata file
+            if data_category in existing_data:
+                df_existing = existing_data[data_category]
+
+                if df_new[ColumnMetadata.SRC_NAME].isna().all(): # which means column names are standarised
+                    comparison_columns = [ColumnMetadata.STD_NAME]
+                    df_new[ColumnMetadata.SRC_NAME] = df_new[ColumnMetadata.STD_NAME].map(
+                        df_existing.set_index(ColumnMetadata.STD_NAME)[ColumnMetadata.SRC_NAME]
+                    )
+                else:
+                    # Compare keys will be both 'Column Name' and 'Source Column'
+                    comparison_columns = [ColumnMetadata.STD_NAME, ColumnMetadata.SRC_NAME]
+
+                if df_new[ColumnMetadata.SRC_FILE].replace('', float('NaN')).isna().all(): # which means filenames are standarised
+                    merged_df = df_new.merge(
+                        df_existing[comparison_columns + [ColumnMetadata.SRC_FILE]],
+                        on=comparison_columns,
+                        how='left'
+                    )
+
+                    df_new[ColumnMetadata.SRC_FILE] = merged_df[f'{ColumnMetadata.SRC_FILE}_y']
+
+                # Check if 'Source Column' and 'Column Name' columns are updated
+                df_existing_subset = df_existing[comparison_columns]
+                df_new_subset = df_new[comparison_columns]
+
+                # Replace the sheet if 'Source Column' and 'Standardised Column Name' columns are updated
+                if not df_new_subset.equals(df_existing_subset):
+                    # Need to update the file
+                    total_num_updates += 1
+                    df_metadata = df_new.copy()
+                    logger.info(f"Updating sheet '{data_category}' in {output_path}")
+                else:
+                    df_metadata = df_existing.copy()
+                    logger.info(f"No updates found in sheet '{data_category}' in {output_path}")
+
+            else:
+                # No existing data for this category; just write the new data
+                df_metadata = df_new.copy()
+                logger.info(f"Creating sheet '{data_category}' in {output_path}")
+
+            # Ensure no duplicate entries for standardisation
+            # assert df_metadata[ColumnMetadata.SRC_NAME].dropna().is_unique
+            # assert df_metadata[ColumnMetadata.STD_NAME].dropna().is_unique
+            if not df_metadata[ColumnMetadata.SRC_NAME].dropna().is_unique:
+                raise ValueError(f"Duplicate values found in {ColumnMetadata.SRC_NAME}. "
+                                 "This indicates multiple standardised columns share the same source column.")
+
+            if not df_metadata[ColumnMetadata.STD_NAME].dropna().is_unique:
+                raise ValueError(f"Duplicate values found in {ColumnMetadata.STD_NAME}. "
+                                 "This indicates multiple standardised columns are using the same standardised name.")
+
+            assert not df_metadata[ColumnMetadata.SRC_NAME].isna().all(), (
+                f"{ColumnMetadata.SRC_NAME} column is completely empty in category '{data_category}'. "
+                f"Check that {output_path} contains the source-to-standardised column mapping "
+                "created during naming standardisation."
+            )
+            assert not df_metadata[ColumnMetadata.STD_NAME].isna().all(), f"{ColumnMetadata.STD_NAME} column is completely empty"
+
+            prepared_data[data_category] = df_metadata
+
         with pd.ExcelWriter(
-            output_path, 
-            engine='openpyxl', 
-            mode=mode, 
+            output_path,
+            engine='openpyxl',
+            mode=mode,
             if_sheet_exists='replace' if mode == 'a' else None
         ) as writer:
-            # Iterate through each data category in col_meta
-            for data_category, columns_dict in sorted(col_meta.items()):
-                # Prepare data for the new DataFrame
-                df_new = pd.DataFrame({
-                    ColumnMetadata.STD_NAME: list(columns_dict.keys()),  # it should be standardised Column Name
-                    ColumnMetadata.SRC_NAME: [v['raw_colname'] for v in columns_dict.values()],
-                    ColumnMetadata.DATA_TYPE: [v['first_dtype'] for v in columns_dict.values()],
-                    ColumnMetadata.DETECTED_DTYPES: [', '.join(v['all_dtypes']) for v in columns_dict.values()],
-                    ColumnMetadata.UNIQUE_COUNT: [len(v['unique_values']) for v in columns_dict.values()],
-                    ColumnMetadata.UNIQUE_VALUES: [stringify_unique_values(v['unique_values']) for v in columns_dict.values()],
-                    ColumnMetadata.STD_FILE: [', '.join(v['filename']) for v in columns_dict.values()],  # Standardised Filenames
-                    ColumnMetadata.SRC_FILE: [', '.join(v['raw_filename']) for v in columns_dict.values()]
-                })
-
-                # Check if this data_category already exists in the metadata file
-                if data_category in existing_data:
-                    df_existing = existing_data[data_category]
-                    
-                    if df_new[ColumnMetadata.SRC_NAME].isna().all(): # which means column names are standarised 
-                        comparison_columns = [ColumnMetadata.STD_NAME]
-                        df_new[ColumnMetadata.SRC_NAME] = df_new[ColumnMetadata.STD_NAME].map(
-                            df_existing.set_index(ColumnMetadata.STD_NAME)[ColumnMetadata.SRC_NAME]
-                        )
-                    else:
-                        # Compare keys will be both 'Column Name' and 'Source Column'
-                        comparison_columns = [ColumnMetadata.STD_NAME, ColumnMetadata.SRC_NAME]
-                    
-                    if df_new[ColumnMetadata.SRC_FILE].replace('', float('NaN')).isna().all(): # which means filenames are standarised 
-                        merged_df = df_new.merge(
-                            df_existing[comparison_columns + [ColumnMetadata.SRC_FILE]],
-                            on=comparison_columns,
-                            how='left'
-                        )
-                        
-                        df_new[ColumnMetadata.SRC_FILE] = merged_df[f'{ColumnMetadata.SRC_FILE}_y']
-
-                    # Check if 'Source Column' and 'Column Name' columns are updated
-                    df_existing_subset = df_existing[comparison_columns]
-                    df_new_subset = df_new[comparison_columns]
-                    
-                    # Replace the sheet if 'Source Column' and 'Standardised Column Name' columns are updated
-                    if not df_new_subset.equals(df_existing_subset):
-                        # Need to update the file
-                        total_num_updates += 1
-                        df_metadata = df_new.copy()
-                        logger.info(f"Updating sheet '{data_category}' in {output_path}")
-                    else:
-                        df_metadata = df_existing.copy()
-                        logger.info(f"No updates found in sheet '{data_category}' in {output_path}")
-
-                else:
-                    # No existing data for this category; just write the new data
-                    df_metadata = df_new.copy()
-                    logger.info(f"Creating sheet '{data_category}' in {output_path}")
-
-                # Ensure no duplicate entries for standardisation
-                # assert df_metadata[ColumnMetadata.SRC_NAME].dropna().is_unique
-                # assert df_metadata[ColumnMetadata.STD_NAME].dropna().is_unique
-                if not df_metadata[ColumnMetadata.SRC_NAME].dropna().is_unique:
-                    raise ValueError(f"Duplicate values found in {ColumnMetadata.SRC_NAME}. "
-                                     "This indicates multiple standardised columns share the same source column.")
-
-                if not df_metadata[ColumnMetadata.STD_NAME].dropna().is_unique:
-                    raise ValueError(f"Duplicate values found in {ColumnMetadata.STD_NAME}. "
-                                     "This indicates multiple standardised columns are using the same standardised name.")
-                
-                assert not df_metadata[ColumnMetadata.SRC_NAME].isna().all(), f"{ColumnMetadata.SRC_NAME} column is completely empty"
-                assert not df_metadata[ColumnMetadata.STD_NAME].isna().all(), f"{ColumnMetadata.STD_NAME} column is completely empty"
-                
-                # Write the combined data to the Excel sheet
+            for data_category, df_metadata in prepared_data.items():
                 df_metadata.to_excel(writer, sheet_name=data_category, index=False)
-     
+
         # If updates were made, create a backup of the original file
         if total_num_updates > 0 and existing_data:
             create_backup(
